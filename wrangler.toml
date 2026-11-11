@@ -2,5 +2,9 @@ name = "telegram_private_chatbot"
 main = "worker.js"
 compatibility_date = "2024-11-30"
 
-# 注意：KV 命名空间 ID 每个用户都不一样，
-# 所以不能写死在这里。用户需要在 Cloudflare 后台手动绑定。
+# 生产 KV 由 Cloudflare 控制台配置。
+
+# 预览使用独立的 KV，隔离生产机器人的会话和话题数据。
+[[previews.kv_namespaces]]
+binding = "TOPIC_MAP"
+id = "02e571cbf42540cd8329c500af5a8581"
