@@ -30,6 +30,7 @@ const threadHealthCache = new Map();
 const topicCreateInFlight = new Map();
 // 管理员权限缓存（实例内）
 const adminStatusCache = new Map();
+let botIdentity;
 
 // --- 本地题库 (15条) ---
 const LOCAL_QUESTIONS = [
@@ -370,6 +371,21 @@ async function checkRateLimit(userId, env, action = 'message', limit = 20, windo
     return { allowed: true, remaining: limit - count - 1 };
 }
 
+async function normalizeBotCommand(text, env) {
+    const addressed = text.match(/^(\/[a-z0-9_]+)@([a-z0-9_]+)(?=\s|$)/i);
+    if (!addressed) return text;
+    if (addressed[0] !== text) return null;
+
+    if (botIdentity?.token !== env.BOT_TOKEN) {
+        const response = await tgCall(env, "getMe", {});
+        const username = response.ok && response.result?.username;
+        if (!username) return null;
+        botIdentity = { token: env.BOT_TOKEN, username: username.toLowerCase() };
+    }
+
+    return addressed[2].toLowerCase() === botIdentity.username ? addressed[1] : null;
+}
+
 export default {
   async fetch(request, env, ctx) {
     // 环境自检
@@ -475,9 +491,9 @@ async function handlePrivateMessage(msg, env, ctx) {
   }
 
   // 拦截普通用户发送的指令
-  if (msg.text && msg.text.startsWith("/") && msg.text.trim() !== "/start") {
-      return;
-  }
+  const text = (msg.text || "").trim();
+  const command = msg.text?.startsWith("/") ? await normalizeBotCommand(text, env) : text;
+  if (msg.text?.startsWith("/") && command !== "/start") return;
 
   const isBanned = await env.TOPIC_MAP.get(`banned:${userId}`);
   if (isBanned) return;
@@ -485,7 +501,7 @@ async function handlePrivateMessage(msg, env, ctx) {
   const verified = await env.TOPIC_MAP.get(`verified:${userId}`);
 
   if (!verified) {
-    const isStart = msg.text && msg.text.trim() === "/start";
+    const isStart = command === "/start";
     const pendingMsgId = isStart ? null : msg.message_id;
     await sendVerificationChallenge(userId, env, pendingMsgId);
     return;
@@ -703,13 +719,15 @@ async function forwardToTopic(msg, userId, key, env, ctx) {
 
 async function handleAdminReply(msg, env, ctx) {
   const threadId = msg.message_thread_id;
-  const text = (msg.text || "").trim();
   const senderId = msg.from?.id;
 
   // 仅允许管理员在群内操作与回信，防止任意群成员向用户私聊注入消息
   if (!senderId || !(await isAdminUser(env, senderId))) {
       return;
   }
+
+  const text = await normalizeBotCommand((msg.text || "").trim(), env);
+  if (text === null) return;
 
   // 【修复】允许在任何话题执行 /cleanup 命令
   if (text === "/cleanup") {
