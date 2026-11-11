@@ -1,10 +1,15 @@
-name = "telegram_private_chatbot"
+name = "telegram-private-chatbot"
 main = "worker.js"
 compatibility_date = "2024-11-30"
+workers_dev = true
+keep_vars = true
 
-# 生产 KV 由 Cloudflare 控制台配置。
+# 保留生产机器人的话题数据；运行时变量由 Cloudflare 控制台管理。
+[[kv_namespaces]]
+binding = "TOPIC_MAP"
+id = "00db81adce5e4830888a3ce79f5a5f5c"
 
-# 预览使用独立的 KV，隔离生产机器人的会话和话题数据。
+# 预览使用独立的 KV。
 [[previews.kv_namespaces]]
 binding = "TOPIC_MAP"
 id = "02e571cbf42540cd8329c500af5a8581"
